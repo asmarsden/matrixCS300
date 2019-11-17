@@ -31,16 +31,15 @@ and read in*/
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <signal.h>
+#include <assert.h>
+#include <unistd.h>
 
 int sent;
 int recieved;
 
 void sigintHandler(int sig_num){
-    //if (sig_num == SIGINT){
     signal(SIGINT, sigintHandler);
     printf("Jobs Sent %d Recieved %d\n", sent, recieved);
-    //}
-    //return;
 }
 
 typedef struct QueueMessage{
@@ -53,66 +52,52 @@ typedef struct QueueMessage{
 } Msg;
 
 
-int populate(int row, int col, int inner, int data[], int id){
-
+void populate(int row, int col, int inner, int data[], int id, int sl){
     key_t key;
-    key = ftok("/home/asmarsden",11696847);//use asmarsden??
+    key = ftok("/home/asmarsden",11696847);
     int msgid= msgget(key, 0666 | IPC_CREAT);
     Msg msg;
     msg.type = 1;
-    //populate msg
     msg.jobid=id;
     msg.rowvec=row;
     msg.colvec=col;
     msg.innerDim =inner;
     for (int i = 0; i < inner * 2; i++){
         msg.data[i]=data[i];
-        //printfprintf("adding %d to dot product of %d\n", data[i], id);
     }
-    
-    //msg.data=data; //have to figure out how big to make size...
-    msgsnd(msgid, &msg, ((inner*2)+6)*sizeof(int), 1);//make sure this is right
+    int rc = msgsnd(msgid, &msg, ((inner*2)+6)*sizeof(int), 1);//make sure this is right
+    int size = ((msg.innerDim * 2 + 4)*32) / 8;
+    printf("Sending job id %d type %ld size %d (rc=%d)\n", msg.jobid, msg.type, size, rc);
     sent++;
-    return 0;
+    sleep(sl);
+    return;
 }
 
 void recieve(int** result){
-key_t key;
-Msg msg;
+    key_t key;
+    Msg msg;
     key = ftok("/home/asmarsden",11696847);//use asmarsden??
-int msgid = msgget(key, 0666 | IPC_CREAT);
-printf("debuga\n");
-int check = 0;
-while(check==0){
-msgrcv(msgid, &msg, 7*sizeof(int), 2, 0);
-}
-printf("debugb\n");
-recieved++;
-printf("debugc\n");
-result[msg.rowvec][msg.colvec]=msg.data[0];
-printf("debugd\n");//passing by reference
-//printf("recieved message. info:\n");
-//printf("type: %ld\njobid: %d\n rowvec:%d\n", msg.type, msg.jobid, msg.rowvec);
-//printf("colvec: %d\ninnerDim: %d\n, data[0]: %d\n", msg.colvec, msg.innerDim, msg.data[0]);
-return;
+    int msgid = msgget(key, 0666 | IPC_CREAT);
+    int check = 0;
+    while(check==0){//added this while to make sure this actually gets a message, since without it, if i ctrl-c'd it would move on without getting a message then seg fault
+       check = msgrcv(msgid, &msg, 7*sizeof(int), 2, 0);
+    }
+    recieved++;
+    int size = ((msg.innerDim * 2 + 4)*32) / 8;
+    printf("Recieving job id %d type %ld size %d\n", msg.jobid, msg.type, size);
+    result[msg.rowvec][msg.colvec]=msg.data[0];
+    return;
 }
 
 int main(int argc, char *argv[]){
     signal(SIGINT, sigintHandler);
-    printf("debug1\n");
     sent = 0;
     recieved = 0;
-    printf("debug2\n");
-    //must figure out how to send info...
-    //looks like ill have t use a global variable
     FILE *matrix1 = fopen(argv[1], "r");
-    //printf("debug1\n");
-    printf("debug3\n");
+    assert(matrix1 != NULL);
     int mat1width, mat1height, mat2width, mat2height;
-    fscanf(matrix1, "%d", &mat1height);//make sure its width then height
+    fscanf(matrix1, "%d", &mat1height);
     fscanf(matrix1, "%d", &mat1width);
-        //printf("debug2\n");
-
     int **mat1 = (int **)malloc(mat1height * sizeof(int*));
     for (int i = 0; i < mat1height; i++){
         mat1[i] = malloc(mat1width * sizeof(int));
@@ -122,67 +107,59 @@ int main(int argc, char *argv[]){
             fscanf(matrix1, "%d", &mat1[i][j]);
         }
     }
-        //printf("debug3\n");
-
     fclose(matrix1);
-    printf("debug4\n");
     FILE *matrix2 = fopen(argv[2], "r");
-    fscanf(matrix2, "%d", &mat2height);//make sure its width then height
+    assert(matrix2 != NULL);
+    fscanf(matrix2, "%d", &mat2height);
     fscanf(matrix2, "%d", &mat2width);
     int **mat2 = (int **)malloc(mat2height * sizeof(int*));
     for (int i = 0; i < mat2height; i++){
         mat2[i] = malloc(mat2width * sizeof(int));
-    }    for (int i = 0; i < mat2height; i++){
+    }    
+    for (int i = 0; i < mat2height; i++){
         for (int j = 0; j < mat2width; j++){
             fscanf(matrix1, "%d", &mat2[i][j]);
         }
     }
-        //printf("debug4\n");
-
     fclose(matrix2);
     int id = 0;
-    printf("debug5\n");
     FILE *resultMatrix = fopen(argv[3], "w");
-    //add some mathy mumbo jumbo.. mat1height * mat2 width?
+    assert(resultMatrix != NULL);
     int **result = (int **)malloc(mat1height * sizeof(int*));
     for (int i = 0; i < mat1height; i++){
         result[i] = malloc(mat2width * sizeof(int));
     }
-    //here we figure out how to package the stuff
     for (int i = 0; i < mat1height; i++){
         for (int j = 0; j < mat2width; j++){
-
-            //TODO: mathy math
-            //ugh i need paper
             int data[mat1width*2];
-            //i wonder if there are notebooks for sale downstairs
             for (int k = 0; k < mat1width; k++){
-                //i think i have my widths and heights mixed up
-                //ill fix that momentarily
                 data[k] = mat1[i][k];
                 data[k+mat1width] = mat2[k][j];
             }
-            populate(i, j, mat1width, data, id);
+            populate(i, j, mat1width, data, id, atoi(argv[4]));
             id++;
         }
     }
-        for (int i = 0; i < mat1height*mat2width; i++){
-            recieve(result);
-            }
-        //printf("debug6\n");
-    //fprintf(resultMatrix, "%d ",mat1height);
-    //fprintf(resultMatrix, "%d\n", mat2width);
+    for (int i = 0; i < mat1height*mat2width; i++){
+        recieve(result);
+    }//can't combine these for loops because the above one doesnt guarentee any particular order. this couldve been faster otherwise
     for (int i = 0; i < mat1height; i++){
         for (int j = 0; j < mat2width; j++){
             fprintf(resultMatrix, "%d ", result[i][j]);
         }
     }
-    printf("debug6\n");
-fclose(resultMatrix);
+    fclose(resultMatrix);
+    for (int i = 0; i < mat1height; i++){
+        free(mat1[i]);
+    }
+    for (int i = 0; i < mat2height; i++){
+        free(mat2[i]);
+    }
+    for (int i = 0; i < mat1height; i++){
+        free(result[i]);
+    }
     free(mat1);
     free(mat2);
     free(result);
-        printf("debug7\n");
-
     return 0;
 }

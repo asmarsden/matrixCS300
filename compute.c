@@ -10,6 +10,17 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <signal.h>
+#include <assert.h>
+
+int sent;
+int recieved;
+
+void sigintHandler(int sig_num){
+    signal(SIGINT, sigintHandler);
+    printf("Jobs Sent %d Recieved %d\n", sent, recieved);
+}
+
 pthread_mutex_t lock;
 typedef struct QueueMessage{
     long type;
@@ -20,72 +31,105 @@ typedef struct QueueMessage{
     int data[100];
 } Msg;
 
-void * calculate(){//still need to figure out what this should return
 
-//grab message type 1
-    //printf("debug compute 5\n");
-
-key_t key;
-Msg msg;
-    key = ftok("/home/asmarsden",11696847);//use asmarsden??
-    //printf("debug compute 6\n");
-//TODO: mathy math and locks. i think this is done
-int msgid = msgget(key, 0666 | IPC_CREAT);
-pthread_mutex_lock(&lock);
-msgrcv(msgid, &msg, 106*sizeof(int), 1, 0);//check tha tthis is right
-//printf("recieved message\n");
-//printf("message info: type: %ld\n", msg.type);
-//printf("message info: jobid: %d\n", msg.jobid);
-//printf("message info: rowvec: %d\n", msg.rowvec);
-//printf("message info: colvec: %d\n", msg.colvec);
-//printf("message info: innerdim: %d\n", msg.innerDim);
-//printf("message info: data[0]: %d\n", msg.data[0]);
-//lock
-    //printf("debug compute 7\n");
-Msg returnmsg;
-returnmsg.type = 2;
-returnmsg.rowvec = msg.rowvec;
-returnmsg.colvec = msg.colvec;
-returnmsg.jobid = msg.jobid;
-returnmsg.innerDim = msg.innerDim;
-int sum = 0;
-for (int i = 0; i < msg.innerDim * 2; i++){
-    printf("data[%d] = %d\n",i, msg.data[i]); 
-}
-for (int i = 0; i < msg.innerDim; i++){
-    sum += msg.data[i] * msg.data[i+msg.innerDim];
-    //printf("sum += %d * %d to = %d\n", msg.data[i], msg.data[i+msg.innerDim], sum);
-}
-//printf("sum for %d,%d is %d\n", msg.colvec, msg.rowvec, sum);
-returnmsg.data[0] = sum;
-msgsnd(msgid, &returnmsg, 7*sizeof(int),2);//make sure this is right
-//unlock
-pthread_mutex_unlock(&lock);
-//printf("debug compute 8\n");
-return NULL;
+void * nosend(){
+    while(1){
+        key_t key;
+        Msg msg;
+        key = ftok("/home/asmarsden",11696847);//use asmarsden??
+        int msgid = msgget(key, 0666 | IPC_CREAT);
+        pthread_mutex_lock(&lock);
+        int check = 0;
+        while(check==0){
+            check = msgrcv(msgid, &msg, 106*sizeof(int), 1, 0);
+        }
+        int size = ((msg.innerDim * 2 + 4)*32) / 8;
+        printf("Recieving job id %d type %ld size %d\n", msg.jobid, msg.type, size);
+        recieved++;
+        int sum = 0;
+        for (int i = 0; i < msg.innerDim; i++){
+            sum += msg.data[i] * msg.data[i+msg.innerDim];
+        }
+        printf("Sum for cell %d,%d is %d\n", msg.rowvec, msg.colvec, sum);
+        pthread_mutex_unlock(&lock);
+        }
+    return NULL;
 }
 
-int main(){ 
-    int numThreads = 0;
-  //  printf("debug compute 1\n");
-    pthread_t p[100];//is this a good number?
-    //pthread_attr_t attr;
-    while(1){numThreads++;
-    //    printf("debug compute 2\n");
-        //calculate();
-        //make threads
-        pthread_create(&p[0], NULL, calculate, NULL);//figure out if those nulls should be there
-//im overcomplicating this
-if (numThreads > 100) break;
+
+void * calculate(){
+    while(1){
+        key_t key;
+        Msg msg;
+        printf("debug 1\n");
+        key = ftok("/home/asmarsden",11696847);
+        int msgid = msgget(key, 0666 | IPC_CREAT);
+                printf("debug a\n");
+
+        pthread_mutex_lock(&lock);
+        int check = 0;
+                printf("debug b\n");
+
+         while(check==0){
+                    printf("check = %d\n", check);
+
+            check = msgrcv(msgid, &msg, 106*sizeof(int), 1, 0);
+   }
+           printf("debug C\n");
+
+        int size = ((msg.innerDim * 2 + 4)*32) / 8;
+        printf("Recieving job id %d type %ld size %d\n", msg.jobid, msg.type, size);
+        recieved++;
+        Msg returnmsg;
+        returnmsg.type = 2;
+        returnmsg.rowvec = msg.rowvec;
+        returnmsg.colvec = msg.colvec;
+        returnmsg.jobid = msg.jobid;
+        returnmsg.innerDim = msg.innerDim;
+        int sum = 0;
+                printf("debug 3\n");
+
+        for (int i = 0; i < msg.innerDim * 2; i++){
+            printf("data[%d] = %d\n",i, msg.data[i]); 
+        }
+        for (int i = 0; i < msg.innerDim; i++){
+            sum += msg.data[i] * msg.data[i+msg.innerDim];
+        }
+        returnmsg.data[0] = sum;
+        int rc = msgsnd(msgid, &returnmsg, 7*sizeof(int),2);
+        size = ((returnmsg.innerDim * 2 + 4)*32) / 8;
+        printf("Sending job id %d type %ld size %d (rc=%d)\n", returnmsg.jobid, returnmsg.type, size, rc);
+        sent++;
+        pthread_mutex_unlock(&lock);
     }
-      //  printf("debug compute3\n");
-
-while (numThreads>0){
-    pthread_join(p[numThreads-1], NULL);
-    numThreads--;
+    return NULL;
 }
-    //printf("debug compute 4\n");
 
+int main(int argc, char *argv[]){ 
+    signal(SIGINT, sigintHandler);
+    sent = 0;
+    recieved = 0;
+    assert(argc == 2 || argc == 3);
+            printf("debug 4\n");
 
-return 0;
+    int numThreads = atoi(argv[1]);
+    pthread_t p[numThreads];
+    //pthread_attr_t attr;
+    while(numThreads>0){
+                printf("debug 5\n");
+
+        numThreads--;
+        if (argc == 3){
+            assert(argv[2][0] == '-' && argv[2][1] == 'c');
+            pthread_create(&p[0], NULL, nosend, NULL);
+        }
+        else{
+            pthread_create(&p[0], NULL, calculate, NULL);//figure out if those nulls should be there
+        }
+    }
+    while (numThreads<atoi(argv[1])){
+        pthread_join(p[numThreads], NULL);
+        numThreads++;
+    }
+    return 0;
 }
