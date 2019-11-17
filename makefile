@@ -5,3 +5,6 @@ compute : compute.c
 
 package : package.c
 	gcc package.c -Wall -o package -std=c99
+
+clean : 
+	-rm compute package

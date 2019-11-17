@@ -1,31 +1,15 @@
-//this will create and populate the input
-//matrices from a pair of input files
-//then create a thread to package up
-//dot product subtasks: one row * one col
-//each subtask will be put on message queue
-//once package is done, it will read
-//completed calculations from queue and 
-//safely populate the outut matrix
-//once all calculations are completed
-//package will print output matrix
-//to the screen and the output file
-//then exit
-//gcc package.c -Wall -o package -std=c99
-//gcc compute.c -Wall -o compute -std=c99
-//ipcs -q -o to check message queue
-//ipcrm -q (number) to remove message from queue
+/* Written by: Aislinn Marsden
+github.com/asmarsden/matrixCS300
 
-/*right now the biggest thing i want to do
-is figure out how compute.c should know
-the size of the thing that will be sent off
-and read in*/
+package.c: this reads in two matrices and packages up the dot products needed to multiply them together.
+It sends these dot products onto a message queue for compute.c to compute.
+It then recieves any messages compute.c sends back, and writes those to a result file. 
 
-//nothing should be hardcoded, so i gotta fix those
+to compile: makefile is included, so just use make
+usage: ./package <matrix1 name> <matrix2 name> <result matrix name> <seconds between thread creation>
 
+*/
 
-
-//usage:
-//./package matrix1 matrix2 result secs between thread creation
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
@@ -36,13 +20,13 @@ and read in*/
 
 int sent;
 int recieved;
-
-void sigintHandler(int sig_num){
+//I had to make sent and recieved global in order to make the signal handler work properly.
+void sigintHandler(int sig_num){//Same signal handler as in compute.c
     signal(SIGINT, sigintHandler);
     printf("Jobs Sent %d Recieved %d\n", sent, recieved);
 }
 
-typedef struct QueueMessage{
+typedef struct QueueMessage{//Same message struct as in compute.c
     long type;
     int jobid;
     int rowvec;
@@ -51,8 +35,7 @@ typedef struct QueueMessage{
     int data[100];
 } Msg;
 
-
-void populate(int row, int col, int inner, int data[], int id, int sl){
+void populate(int row, int col, int inner, int data[], int id, int sl){//This takes in the info needed to send a message to the message queue, and sends a message with this info to the message queue.
     key_t key;
     key = ftok("/home/asmarsden",11696847);
     int msgid= msgget(key, 0666 | IPC_CREAT);
@@ -73,10 +56,10 @@ void populate(int row, int col, int inner, int data[], int id, int sl){
     return;
 }
 
-void recieve(int** result){
+void recieve(int** result){//This recieves messages that have come back from compute.c and adds them to the resulting matrix.
     key_t key;
     Msg msg;
-    key = ftok("/home/asmarsden",11696847);//use asmarsden??
+    key = ftok("/home/asmarsden",11696847);
     int msgid = msgget(key, 0666 | IPC_CREAT);
     int check = 0;
     while(check==0){//added this while to make sure this actually gets a message, since without it, if i ctrl-c'd it would move on without getting a message then seg fault
@@ -93,6 +76,7 @@ int main(int argc, char *argv[]){
     signal(SIGINT, sigintHandler);
     sent = 0;
     recieved = 0;
+
     FILE *matrix1 = fopen(argv[1], "r");
     assert(matrix1 != NULL);
     int mat1width, mat1height, mat2width, mat2height;
@@ -108,6 +92,7 @@ int main(int argc, char *argv[]){
         }
     }
     fclose(matrix1);
+
     FILE *matrix2 = fopen(argv[2], "r");
     assert(matrix2 != NULL);
     fscanf(matrix2, "%d", &mat2height);
@@ -122,9 +107,8 @@ int main(int argc, char *argv[]){
         }
     }
     fclose(matrix2);
+
     int id = 0;
-    FILE *resultMatrix = fopen(argv[3], "w");
-    assert(resultMatrix != NULL);
     int **result = (int **)malloc(mat1height * sizeof(int*));
     for (int i = 0; i < mat1height; i++){
         result[i] = malloc(mat2width * sizeof(int));
@@ -140,6 +124,9 @@ int main(int argc, char *argv[]){
             id++;
         }
     }
+    
+    FILE *resultMatrix = fopen(argv[3], "w");
+    assert(resultMatrix != NULL);
     for (int i = 0; i < mat1height*mat2width; i++){
         recieve(result);
     }//can't combine these for loops because the above one doesnt guarentee any particular order. this couldve been faster otherwise
@@ -149,6 +136,7 @@ int main(int argc, char *argv[]){
         }
     }
     fclose(resultMatrix);
+
     for (int i = 0; i < mat1height; i++){
         free(mat1[i]);
     }
