@@ -48,7 +48,7 @@ void populate(int row, int col, int inner, int data[], int id, int sl){//This ta
     for (int i = 0; i < inner * 2; i++){
         msg.data[i]=data[i];
     }
-    int rc = msgsnd(msgid, &msg, ((inner*2)+6)*sizeof(int), 1);//make sure this is right
+    int rc = msgsnd(msgid, &msg, ((inner*2)+4)*sizeof(int), 1);//make sure this is right
     int size = ((msg.innerDim * 2 + 4)*32) / 8;
     printf("Sending job id %d type %ld size %d (rc=%d)\n", msg.jobid, msg.type, size, rc);
     sent++;
@@ -66,7 +66,7 @@ void recieve(int** result){//This recieves messages that have come back from com
        check = msgrcv(msgid, &msg, 7*sizeof(int), 2, 0);
     }
     recieved++;
-    int size = ((msg.innerDim * 2 + 4)*32) / 8;
+    int size = ((1 + 4)*32) / 8;//1 item in data
     printf("Recieving job id %d type %ld size %d\n", msg.jobid, msg.type, size);
     result[msg.rowvec][msg.colvec]=msg.data[0];
     return;

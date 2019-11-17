@@ -91,7 +91,7 @@ void * calculate(){//This is the function the threads go to if -n is not specifi
         }
         returnmsg.data[0] = sum;
         int rc = msgsnd(msgid, &returnmsg, 7*sizeof(int),2);
-        size = ((returnmsg.innerDim * 2 + 4)*32) / 8;
+        size = ((1 + 4)*32) / 8;
         printf("Sending job id %d type %ld size %d (rc=%d)\n", returnmsg.jobid, returnmsg.type, size, rc);
         sent++;
         pthread_mutex_unlock(&lock);
