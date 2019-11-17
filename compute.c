@@ -86,9 +86,6 @@ void * calculate(){//This is the function the threads go to if -n is not specifi
         returnmsg.jobid = msg.jobid;
         returnmsg.innerDim = msg.innerDim;
         int sum = 0;
-        for (int i = 0; i < msg.innerDim * 2; i++){
-            printf("data[%d] = %d\n",i, msg.data[i]); 
-        }
         for (int i = 0; i < msg.innerDim; i++){
             sum += msg.data[i] * msg.data[i+msg.innerDim];
         }
@@ -113,7 +110,7 @@ int main(int argc, char *argv[]){
     while(numThreads>0){
         numThreads--;
         if (argc == 3){
-            assert(argv[2][0] == '-' && argv[2][1] == 'c');
+            assert(argv[2][0] == '-' && argv[2][1] == 'n');
             pthread_create(&p[0], NULL, nosend, NULL);
         }
         else{
