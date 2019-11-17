@@ -30,6 +30,18 @@ and read in*/
 #include <stdlib.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <signal.h>
+
+int sent;
+int recieved;
+
+void sigintHandler(int sig_num){
+    //if (sig_num == SIGINT){
+    signal(SIGINT, sigintHandler);
+    printf("Jobs Sent %d Recieved %d\n", sent, recieved);
+    //}
+    //return;
+}
 
 typedef struct QueueMessage{
     long type;
@@ -55,12 +67,12 @@ int populate(int row, int col, int inner, int data[], int id){
     msg.innerDim =inner;
     for (int i = 0; i < inner * 2; i++){
         msg.data[i]=data[i];
-        printf("adding %d to dot product of %d\n", data[i], id);
+        //printfprintf("adding %d to dot product of %d\n", data[i], id);
     }
     
     //msg.data=data; //have to figure out how big to make size...
     msgsnd(msgid, &msg, ((inner*2)+6)*sizeof(int), 1);//make sure this is right
-    //printf("sent message %d\n", x);
+    sent++;
     return 0;
 }
 
@@ -69,8 +81,16 @@ key_t key;
 Msg msg;
     key = ftok("/home/asmarsden",11696847);//use asmarsden??
 int msgid = msgget(key, 0666 | IPC_CREAT);
+printf("debuga\n");
+int check = 0;
+while(check==0){
 msgrcv(msgid, &msg, 7*sizeof(int), 2, 0);
-result[msg.rowvec][msg.colvec]=msg.data[0];//passing by reference
+}
+printf("debugb\n");
+recieved++;
+printf("debugc\n");
+result[msg.rowvec][msg.colvec]=msg.data[0];
+printf("debugd\n");//passing by reference
 //printf("recieved message. info:\n");
 //printf("type: %ld\njobid: %d\n rowvec:%d\n", msg.type, msg.jobid, msg.rowvec);
 //printf("colvec: %d\ninnerDim: %d\n, data[0]: %d\n", msg.colvec, msg.innerDim, msg.data[0]);
@@ -78,8 +98,16 @@ return;
 }
 
 int main(int argc, char *argv[]){
+    signal(SIGINT, sigintHandler);
+    printf("debug1\n");
+    sent = 0;
+    recieved = 0;
+    printf("debug2\n");
+    //must figure out how to send info...
+    //looks like ill have t use a global variable
     FILE *matrix1 = fopen(argv[1], "r");
     //printf("debug1\n");
+    printf("debug3\n");
     int mat1width, mat1height, mat2width, mat2height;
     fscanf(matrix1, "%d", &mat1height);//make sure its width then height
     fscanf(matrix1, "%d", &mat1width);
@@ -97,6 +125,7 @@ int main(int argc, char *argv[]){
         //printf("debug3\n");
 
     fclose(matrix1);
+    printf("debug4\n");
     FILE *matrix2 = fopen(argv[2], "r");
     fscanf(matrix2, "%d", &mat2height);//make sure its width then height
     fscanf(matrix2, "%d", &mat2width);
@@ -112,6 +141,7 @@ int main(int argc, char *argv[]){
 
     fclose(matrix2);
     int id = 0;
+    printf("debug5\n");
     FILE *resultMatrix = fopen(argv[3], "w");
     //add some mathy mumbo jumbo.. mat1height * mat2 width?
     int **result = (int **)malloc(mat1height * sizeof(int*));
@@ -147,6 +177,7 @@ int main(int argc, char *argv[]){
             fprintf(resultMatrix, "%d ", result[i][j]);
         }
     }
+    printf("debug6\n");
 fclose(resultMatrix);
     free(mat1);
     free(mat2);
