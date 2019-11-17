@@ -76,10 +76,11 @@ int main(int argc, char *argv[]){
     signal(SIGINT, sigintHandler);
     sent = 0;
     recieved = 0;
+    int mat1width, mat1height, mat2width, mat2height;
+
 
     FILE *matrix1 = fopen(argv[1], "r");
     assert(matrix1 != NULL);
-    int mat1width, mat1height, mat2width, mat2height;
     fscanf(matrix1, "%d", &mat1height);
     fscanf(matrix1, "%d", &mat1width);
     int **mat1 = (int **)malloc(mat1height * sizeof(int*));
@@ -97,6 +98,7 @@ int main(int argc, char *argv[]){
     assert(matrix2 != NULL);
     fscanf(matrix2, "%d", &mat2height);
     fscanf(matrix2, "%d", &mat2width);
+    assert(mat1width == mat2height); //If this isn't the case, then the matrices cannot be multiplied.
     int **mat2 = (int **)malloc(mat2height * sizeof(int*));
     for (int i = 0; i < mat2height; i++){
         mat2[i] = malloc(mat2width * sizeof(int));
@@ -124,7 +126,7 @@ int main(int argc, char *argv[]){
             id++;
         }
     }
-    
+
     FILE *resultMatrix = fopen(argv[3], "w");
     assert(resultMatrix != NULL);
     for (int i = 0; i < mat1height*mat2width; i++){

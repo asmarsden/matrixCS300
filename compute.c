@@ -4,10 +4,10 @@ github.com/asmarsden/matrixCS300
 compute.c: creted a thread pool of a specified number of threads
 uses those threads to read in messages and compute dot products
 then either sends messages with dot product results
-or prints the results to screen with '-c'
+or prints the results to screen with '-n'
 
 to compile: makefile is included, so do make
-usage: ./compute <number of threads> <-c or nothing>
+usage: ./compute <number of threads> <-n or nothing>
 
 */
 
@@ -65,7 +65,7 @@ void * nosend(){//The function the threads enter if -c is specified; no messages
 }
 
 
-void * calculate(){//This is the function the threads go to if -c is not specified. This grabs a message, computes it, then sends the result back.
+void * calculate(){//This is the function the threads go to if -n is not specified. This grabs a message, computes it, then sends the result back.
     while(1){
         key_t key;
         Msg msg;
