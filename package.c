@@ -17,6 +17,7 @@ usage: ./package <matrix1 name> <matrix2 name> <result matrix name> <seconds bet
 #include <signal.h>
 #include <assert.h>
 #include <unistd.h>
+#include <pthread.h>
 
 int sent;
 int recieved;
@@ -25,6 +26,8 @@ void sigintHandler(int sig_num){//Same signal handler as in compute.c
     signal(SIGINT, sigintHandler);
     printf("Jobs Sent %d Recieved %d\n", sent, recieved);
 }
+
+pthread_mutex_t lock;
 
 typedef struct QueueMessage{//Same message struct as in compute.c
     long type;
@@ -35,25 +38,29 @@ typedef struct QueueMessage{//Same message struct as in compute.c
     int data[100];
 } Msg;
 
-void populate(int row, int col, int inner, int data[], int id, int sl){//This takes in the info needed to send a message to the message queue, and sends a message with this info to the message queue.
+void * populate(void *in){//This takes in the info needed to send a message to the message queue, and sends a message with this info to the message queue.
     key_t key;
     key = ftok("/home/asmarsden",11696847);
-    int msgid= msgget(key, 0666 | IPC_CREAT);
+    Msg *temp = (Msg*)in;
     Msg msg;
-    msg.type = 1;
-    msg.jobid=id;
-    msg.rowvec=row;
-    msg.colvec=col;
-    msg.innerDim =inner;
-    for (int i = 0; i < inner * 2; i++){
-        msg.data[i]=data[i];
+    msg.type = temp->type;
+    msg.rowvec = temp->rowvec;
+    msg.colvec = temp->colvec;
+    msg.jobid = temp->jobid;
+    msg.innerDim = temp->innerDim;
+    for (int i = 0; i < temp->innerDim*2; i++){
+        msg.data[i]=temp->data[i];
     }
-    int rc = msgsnd(msgid, &msg, ((inner*2)+4)*sizeof(int), 1);//make sure this is right
+    int msgid= msgget(key, 0666 | IPC_CREAT);
+    pthread_mutex_lock(&lock);
+    int rc = msgsnd(msgid, &msg, ((msg.innerDim*2)+4)*sizeof(int), 1);//make sure this is right
     int size = ((msg.innerDim * 2 + 4)*32) / 8;
     printf("Sending job id %d type %ld size %d (rc=%d)\n", msg.jobid, msg.type, size, rc);
     sent++;
-    sleep(sl);
-    return;
+    //gotta free in here somewhere
+    //free(temp);
+    pthread_mutex_unlock(&lock);
+    return NULL;
 }
 
 void recieve(int** result){//This recieves messages that have come back from compute.c and adds them to the resulting matrix.
@@ -77,7 +84,7 @@ int main(int argc, char *argv[]){
     sent = 0;
     recieved = 0;
     int mat1width, mat1height, mat2width, mat2height;
-
+  
 
     FILE *matrix1 = fopen(argv[1], "r");
     assert(matrix1 != NULL);
@@ -109,20 +116,31 @@ int main(int argc, char *argv[]){
         }
     }
     fclose(matrix2);
-
+    pthread_t p[mat1height*mat2width];
+    Msg * msg = malloc((mat1height*mat2width)*sizeof(Msg));
     int id = 0;
     int **result = (int **)malloc(mat1height * sizeof(int*));
     for (int i = 0; i < mat1height; i++){
         result[i] = malloc(mat2width * sizeof(int));
     }
+
+    //pthread_create(&p, NULL, dotProduct, NULL);
     for (int i = 0; i < mat1height; i++){
         for (int j = 0; j < mat2width; j++){
-            int data[mat1width*2];
+            //int data[mat1width*2];
+
+            //Msg *msg = malloc(sizeof(Msg));
+            (msg+id)->type = 1;
+            (msg+id)->jobid = id; 
+            (msg+id)->rowvec = i; 
+            (msg+id)->colvec = j; 
+            (msg+id)->innerDim = mat1width;
             for (int k = 0; k < mat1width; k++){
-                data[k] = mat1[i][k];
-                data[k+mat1width] = mat2[k][j];
+                (msg+id)->data[k] = mat1[i][k];
+                (msg+id)->data[k+mat1width] = mat2[k][j];
             }
-            populate(i, j, mat1width, data, id, atoi(argv[4]));
+            pthread_create(&p[id], NULL, populate,(void*) (msg+id));
+            sleep(atoi(argv[4]));
             id++;
         }
     }
@@ -138,7 +156,10 @@ int main(int argc, char *argv[]){
         }
     }
     fclose(resultMatrix);
-
+    while (id >0){
+        pthread_join(p[id], NULL);
+        id--;
+    }
     for (int i = 0; i < mat1height; i++){
         free(mat1[i]);
     }
@@ -148,6 +169,7 @@ int main(int argc, char *argv[]){
     for (int i = 0; i < mat1height; i++){
         free(result[i]);
     }
+    free(msg);
     free(mat1);
     free(mat2);
     free(result);

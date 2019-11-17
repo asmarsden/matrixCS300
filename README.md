@@ -11,6 +11,8 @@ A makefile is included; you can do make to compile and make clean to remove the 
 
 Note: When doing very large computations, with lots of messages to be sent and recieved, the message queue may become full. This can be avoided by doing -n on compute, but this makes it so that a result is not created, the output is simply printed to screen. 
 
+Update: I was making package wrong. Now that I have added threads to package, the above statement is false.
+
 ./package matrixa1.dat matrixa2.dat result.dat 1
 ./compute 3
 ./compute 3 -n
